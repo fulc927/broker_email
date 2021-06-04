@@ -79,7 +79,7 @@ handle_MAIL(_From, State) ->
     % you can accept or reject the FROM address here
     {ok, State}.
 
-handle_MAIL_extension(Extension, _State) ->
+handle_MAIL_extension(_Extension, _State) ->
     %rabbit_log:warning("EMAIL_HANDLER Unknown MAIL FROM extension ~s~n", [Extension]),
     error.
 
@@ -90,7 +90,7 @@ handle_RCPT(_To, State) ->
     % you can accept or reject RCPT TO addesses here, one per call
     {ok, State}.
 
-handle_RCPT_extension(Extension, _State) ->
+handle_RCPT_extension(_Extension, _State) ->
     %rabbit_log:warning("EMAIL_HANDLER Unknown RCPT TO extension ~s~n", [Extension]),
     error.
 
@@ -104,7 +104,7 @@ handle_DATA(_From, To, Data, State=#state{hostname=_Hostname,hostname_client=_Ho
     Reference = lists:flatten([io_lib:format("~2.16.0b", [X]) || <<X>> <= erlang:md5(term_to_binary(os:timestamp()))]),
 
    case email_filter:extract_payload(Data,_Hostname_client,inet:ntoa(_Address)) of
-        {ok, ContentType, Headers, Body } ->
+        {ok, _ContentType, Headers, _Body } ->
             rabbit_log:info("EMAIL_HANDLER FILTER Headers ~s ~n", [Headers]),
             rabbit_log:info("EMAIL_HANDLER raboutage Headers avec From ~s ~n", [_From]),
 	    %NewHeaders = firsts(Headers,_From),

@@ -12,8 +12,7 @@
 -include_lib("amqp_client/include/amqp_client.hrl").
 
 -export([start_link/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-    terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,terminate/2, code_change/3]).
 
 -record(state, {connection, channel, exchange}).
 
@@ -49,7 +48,7 @@ try_declaring_exchange(Connection, Exchange) ->
 handle_call(_Msg, _From, State) ->
     {reply, unknown_command, State}.
 
-handle_cast({Reference, To, ContentType, Headers, Body, From}, #state{channel=Channel, exchange=Exchange}=State) ->
+handle_cast({Reference, To, ContentType, Headers, Body, _From}, #state{channel=Channel, exchange=Exchange}=State) ->
     rabbit_log:info(" SENDERHEADERS ~p ~n", [Headers]),
     rabbit_log:info(" SENDERchannel2 ~p ~n", [Channel]),
     lists:foreach(
@@ -60,7 +59,7 @@ handle_cast({Reference, To, ContentType, Headers, Body, From}, #state{channel=Ch
                 message_id = list_to_binary(Reference),
                 timestamp = amqp_ts(),
                 headers = lists:map(fun({Name, Value}) -> {Name, longstr, Value} end, Headers)},
-                %HEADER sp√cifique que j'avais mis la pour consumer une queue qui envoie des emails  headers = [{<<"From">>, longstr, From}]},
+                %HEADER spcifique que javais mis la pour consumer une queue qui envoie des emails  headers = [{<<"From">>, longstr, From}]},
             Msg = #amqp_msg{props=Properties, payload=Body},
             amqp_channel:cast(Channel, Publish, Msg) end, To),
     	            {noreply, State};
@@ -68,7 +67,7 @@ handle_cast({Reference, To, ContentType, Headers, Body, From}, #state{channel=Ch
 handle_cast(stop, State) ->
     {stop, normal, State}.
 
-handle_info(Msg, State) ->
+handle_info(_Msg, State) ->
     %rabbit_log:info("~w", [Msg]),
     {noreply, State}.
 

@@ -7,22 +7,21 @@
 -module(broker_score_handler).
 -behaviour(gen_server).
 
--include_lib("amqp_client/include/amqp_client.hrl").
-
 -export([start_link/3]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-    terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([process_results/6, tothefront/3, tothefront2/4]).
 -record(state, {connection, channel,routing_key,id,serveur,ip,table}).
 -define(FILENAME,"SEBFILE").
 -define(FILENAME2,"SEBFILE2").
+-include_lib("amqp_client/include/amqp_client.hrl").
 
 start_link({VHost, Queue}, Domain, Rkey) ->
     gen_server:start_link(?MODULE, [{VHost, Queue}, Domain, Rkey], []).
 
-init([{VHost, Queue}, Domain, Rkey]) ->
+init([{VHost, Queue}, _Domain, Rkey]) ->
     process_flag(trap_exit, true),
     %{ok, Connection} = amqp_connection:start(#amqp_params_direct{virtual_host=VHost}),
-    {ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
+    {ok,_Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
     {ok, Connection} = amqp_connection:start(#amqp_params_network{username =Username, password = Password,virtual_host = VHost, host = Host, port = Port}),
 
 
@@ -62,11 +61,7 @@ handle_info(#'basic.cancel_ok'{}, State) ->
 
 %% A delivery
 handle_info({#'basic.deliver'{routing_key=RKey, consumer_tag=_Tag}, Content}, State) ->
-    	rabbit_log:info("RABBIT_SCORE_PERSO l AMQP†avec tout le contenu†~p ", [Content]),
     #amqp_msg{props = Properties, payload = Payload} = Content,
-    	rabbit_log:info("RABBIT_SCORE_PERSO  PROPERTIES†~p ", [Properties]),
-    	rabbit_log:info("RABBIT_SCORE_PERSO  PayLoad†~s ", [Payload]),
-
 	Reference2 = lists:flatten([io_lib:format("~2.16.0b", [X]) || <<X>> <= erlang:md5(term_to_binary(os:timestamp()))]),
 	case application:get_env(broker_email, email_store) of
 	undefined -> ok;
@@ -111,13 +106,13 @@ handle_info(Msg, State) ->
 	   RKey = State#state.routing_key,
 	   rabbit_log:info("XXX RABBIT_SCORE_PERSO retour le routing key ~p" , [RKey]),
 	   Id = State#state.id,
-	   Ip = State#state.ip,
-	   Serveur = State#state.serveur,
+	   _Ip = State#state.ip,
+	   _Serveur = State#state.serveur,
 	   %Head = State#state.head,
 	   rabbit_log:info("RABBIT_SCORE_PERSO retour SPAMASSASSIN ~p" , [Data]),
 	   parse(Id,State,RKey,Data);
         {_,_} ->
-	   rabbit_log:info("RABBIT_SCORE_PERSO†from tcpclosing ~p" , [Msg])		    
+	   rabbit_log:alert("RABBIT_SCORE_PERSOfrom tcpclosing ~p ~n" , [Msg])		    
     end,
 	rabbit_log:info("plus de messages from rabbit_score_handler ~p" , [Msg]),
         {noreply, State}.
@@ -207,7 +202,7 @@ parse(Id,State,_RKey,Data) ->
            sascore2(N-1,U);
            sascore2(_N,[W|_U]) -> W.
 
-           process_results(Id,State,_RKey,[],Draft_Score,[]) ->
+           process_results(_Id,_State,_RKey,[],_Draft_Score,[]) ->
               {error, not_found};
 	   
 	   process_results(Id,State,_RKey,[],Draft_Score, Results) ->
@@ -215,7 +210,7 @@ parse(Id,State,_RKey,Data) ->
            %rabbit_log:info("PARSE SCORE_HANDLER CHOPPE¬†LE¬†FINAL¬†_RESULTS ~p" , [Results]),
            %rabbit_log:info("PARSE SCORE_HADLER¬†_DATE ~p" , [_Date]),
 	   tothefront(Id,_RKey,[list_to_binary(Draft_Score)|Results]),
-	   Tab = State#state.table,
+	   _Tab = State#state.table,
 	   %tothefront2(State,Tab,Id,_RKey),
                {ok, lists:reverse(Results)};
                        	   
@@ -261,7 +256,6 @@ parse(Id,State,_RKey,Data) ->
            %case dets:open_file(?MODULE, [{file, ?FILENAME},{type,set}]) of
    	   %	{ok, Ref} -> dets:update_counter(?MODULE,Id,{15,1});
    	   %	{error, Reason}=E -> rabbit_log:info("Unable to open database file: ~p~n", [E]) end,
-	   %rabbit_log:info("PARSE SCORE_HANDLER CHOPPE†LE†RESULTS SPF_FAIL ~p" , [Results]);
 
            %process_results(Id,_RKey,[V="HTML_MESSAGE"|T],Draft_Score, Results) ->
            %process_results(Id,_RKey,T,Draft_Score, [list_to_binary(V)|Results]),
@@ -340,7 +334,6 @@ func2([H|U]) ->
 
 tothefront(Id,RoutingKey,Argv) ->
 
-        %% variable Date pushe© dans cochdb
     %% SNIPPET IMPORTANT
     %%log en base couchdb
     %{ok, Server} = couchdb:server_record(<<"http://localhost:5984">>),
@@ -361,8 +354,6 @@ tothefront(Id,RoutingKey,Argv) ->
 %   	{ok, Ref} -> dets:update_counter(?MODULE,Id,{9,1});
 %   	{error, Reason}=E -> rabbit_log:info("Unable to open database file: ~p~n", [E]) end,
     
-    rabbit_log:info("XXX TOTHEFRONT ~p:~n", [RoutingKey]),
-    rabbit_log:info("TOTHEFRONT†SCORE_HANDLER_PERSO SPF†ROUTING_KEY†MESSAGE ~p:~p~n", [RoutingKey, Argv]),
 
 %       <<X:64/big-unsigned-integer>> = crypto:strong_rand_bytes(8),
        Random = crypto:bytes_to_integer(crypto:strong_rand_bytes(3)),
@@ -375,7 +366,6 @@ tothefront(Id,RoutingKey,Argv) ->
     {ok, Channel2} = amqp_connection:open_channel(Connection2),
     amqp_channel:call(Channel2, #'exchange.declare'{exchange = <<"pipe_results">>,type = <<"fanout">>, durable = true}),
             Props = #'P_basic'{delivery_mode = 2, headers = [{<<"To">>, longstr, RoutingKey},{<<"Ref">>, signedint , Random} ]},
-                %HEADER sp√cifique que j'avais mis la pour consumer une queue qui envoie des emails  headers = [{<<"From">>, longstr, From}]},
     %amqp_channel:cast(Channel2,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = <<"SALUT\nMONGARS\nTUPUS\nAHOUI\n\n">>}),
    amqp_channel:cast(Channel2,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = Argv}),
 

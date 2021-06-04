@@ -19,7 +19,8 @@ start_link({VHost, Queue}, Domain, Rkey) ->
 
 init([{VHost, Queue}, Domain, Rkey]) ->
 	process_flag(trap_exit, true),
-	{ok,Cred = [Username,Password,Host,Port]} = application:get_env(rabbitmq_email, credentials),
+	{ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
+	io:format("broker_email Username ~p ~n",[Username]),
     	{ok, Connection} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = <<"/">>, host = Host, port = Port}),
 
 	pick_the_rk(Connection, Queue, Rkey).
