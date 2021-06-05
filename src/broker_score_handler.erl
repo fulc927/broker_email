@@ -306,7 +306,7 @@ parse(Id,State,_RKey,Data) ->
 
 tothefront2(State,Tab,Id,RoutingKey) ->
 
-		{ok,Cred = [Username,Password,Host,Port]} = application:get_env(rabbitmq_email, credentials),
+		{ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
     		{ok, Connection} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = <<"/">>, host = Host, port = Port}),
     		{ok, Channel} = amqp_connection:open_channel(Connection),
     		amqp_channel:call(Channel, #'exchange.declare'{exchange = <<"pipe_results">>,type = <<"fanout">>, durable = true}),
@@ -360,7 +360,7 @@ tothefront(Id,RoutingKey,Argv) ->
        io:format("le Random qui sert de ref ~p ~n",[Random]),
 	
     %AMQP
-    {ok,Cred = [Username,Password,Host,Port]} = application:get_env(rabbitmq_email, credentials),
+    {ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
     {ok, Connection2} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = <<"/">>, host = Host, port = Port}),
     %{ok, Connection2} = amqp_connection:start(#amqp_params_network{virtual_host = <<"/">>}),
     {ok, Channel2} = amqp_connection:open_channel(Connection2),

@@ -30,6 +30,7 @@
 -include_lib("kernel/include/logger.hrl").
 
 init(Hostname, SessionCount, Address, Options) when SessionCount < 20 ->
+    io:format("~s EMAIL_HANDLER SMTP connection from Domain et Address ~p~n", [Hostname, Address]),
     rabbit_log:info("~s EMAIL_HANDLER SMTP connection from Domain et Address ~p~n", [Hostname, Address]),
     process_flag(trap_exit, true),
     {ok, SenderPid} = rabbit_message_sender:start_link(Hostname),

@@ -27,7 +27,7 @@ init([Domain]) ->
 
     process_flag(trap_exit, true),
     {ok, Connection} = amqp_connection:start(#amqp_params_direct{virtual_host=VHost}),
-   % {ok,Cred = [Username,Password,Host,Port]} = application:get_env(rabbitmq_email, credentials),
+   % {ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
    % {ok, Connection} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = VHost, host = Host, port = Port}),
     try_declaring_exchange(Connection, Exchange),  %l'exchange en question est email-in
 

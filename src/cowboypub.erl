@@ -24,7 +24,7 @@ start_link({VHost, Queue}, Domain) ->
 init([{VHost, Queue}, Domain]) ->
     process_flag(trap_exit, true),
     erlang:send_after(?INTERVAL, self(), trigger),
-    {ok,Cred = [Username,Password,Host,Port]} = application:get_env(rabbitmq_email, credentials),
+    {ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
    {ok, Connection} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = <<"/">>, host = Host, port = Port}),
     %{ok, Connection} = amqp_connection:start(#amqp_params_direct{virtual_host=VHost}),
     try_declaring_queue(Connection, Queue),

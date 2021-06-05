@@ -10,7 +10,7 @@
 -export([extract_payload/3]).
 
 extract_payload(Data,Rabout1,Rabout2) ->
-    case application:get_env(rabbitmq_email, email_filter) of
+    case application:get_env(broker_email, email_filter) of
         % filtering is disable, just pass on the entire e-mail
         {ok, false} ->
             {ok, <<"application/mime">>, [], Data};
@@ -40,7 +40,7 @@ AllHeaders_final = lists:merge(AllHeaders_transient,[{<<"Ip">>,list_to_binary(Ip
 
 filter_header({Name, _Value}) ->
     Name2 = string:to_lower(binary_to_list(Name)),
-    {ok, Filter} = application:get_env(rabbitmq_email, email_headers),
+    {ok, Filter} = application:get_env(broker_email, email_headers),
     rabbit_log:info("FILTER la liste des headers imporants ~p ~n",[Filter]),
     lists:member(Name2, Filter).
 
@@ -73,7 +73,7 @@ filter_body({<<"multipart">>, Subtype, Header, _Params, Parts}=Parent) ->
         Parts3 when is_list(Parts3) ->
             rabbit_log:info("450 FILTER Pass3 retour filter_multipart verifie is_list(Parts3) ~p ~n",[Parts3]),
             % pass 2: select the best part
-            {ok, Filter} = application:get_env(rabbitmq_email, email_filter),
+            {ok, Filter} = application:get_env(broker_email, email_filter),
             Seb = best_multipart(Parts3, [], Parent),
 	    rabbit_log:info("490 FILTER best_multipart avec filter vide [] ~p ~n",[Seb]),
             {send, Seb}
