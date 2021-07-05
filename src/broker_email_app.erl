@@ -44,7 +44,7 @@ init([]) ->
 	 	10000, 
 	 	worker, 
 	 	[result_queue]},
- {cowboypub, 
+ 	{cowboypub, 
 	 	{cowboypub,start_link, [{<<"/">>,<<"cowboypub">>},<<"mail-testing.com">>]}, 
 	 	permanent, 
 	 	10000, 

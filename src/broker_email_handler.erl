@@ -33,9 +33,9 @@ init(Hostname, SessionCount, Address, Options) when SessionCount < 20 ->
     io:format("~s EMAIL_HANDLER SMTP connection from Domain et Address ~p~n", [Hostname, Address]),
     rabbit_log:info("~s EMAIL_HANDLER SMTP connection from Domain et Address ~p~n", [Hostname, Address]),
     process_flag(trap_exit, true),
-    {ok, SenderPid} = rabbit_message_sender:start_link(Hostname),
+    {ok, SenderPid} = broker_message_sender:start_link(Hostname),
 
-    Banner = [Hostname, " ESMTP rabbit_email_handler"],
+    Banner = [Hostname, " ESMTP broker_email_handler"],
     Hostname_client = [],
     State = #state{hostname=Hostname,hostname_client = Hostname_client, sender_pid=SenderPid, addr=Address, options=Options},
     {ok, Banner, State};
@@ -100,11 +100,14 @@ handle_DATA(_From, _To, _Data, #state{auth_user=undefined} = State) ->
     {error, ?AUTH_REQUIRED, State};
 handle_DATA(_From, _To, <<>>, State) ->
     {error, "552 Message too small", State};
-handle_DATA(_From, To, Data, State=#state{hostname=_Hostname,hostname_client=_Hostname_client,sender_pid=SenderPid,addr=_Address}) ->
+handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client=Hostname_client,sender_pid=SenderPid,addr=Address}) ->
     % some kind of unique id
     Reference = lists:flatten([io_lib:format("~2.16.0b", [X]) || <<X>> <= erlang:md5(term_to_binary(os:timestamp()))]),
+            rabbit_log:info("EMAIL_HANDLER FILTER Hostname ~s ~n", [Hostname]),
+            rabbit_log:info("EMAIL_HANDLER FILTER Hostname_client ~s ~n", [Hostname_client]),
+            rabbit_log:info("EMAIL_HANDLER FILTER Address ~s ~n", [Address]),
 
-   case email_filter:extract_payload(Data,_Hostname_client,inet:ntoa(_Address)) of
+   case email_filter:extract_payload(Data,Hostname_client,inet:ntoa(Address)) of
         {ok, _ContentType, Headers, _Body } ->
             rabbit_log:info("EMAIL_HANDLER FILTER Headers ~s ~n", [Headers]),
             rabbit_log:info("EMAIL_HANDLER raboutage Headers avec From ~s ~n", [_From]),
