@@ -31,6 +31,7 @@ init([]) ->
         % email to amqp
         [
 	{email_handler, {gen_smtp_server, start_link, [broker_email_handler, ServerConfig]},permanent, 10000, worker, [broker_email_handler]},
+	%{email_handler, {gen_smtp_server, start_link, [broker_email_handler, ServerConfig,[{keyfile, "test/fixtures/server.key"}, {certfile, "test/fixtures/server.crt"}, {hostname, "localhost"}]]},permanent, 10000, worker, [broker_email_handler]},
 	{broker_score_handler_sup, {broker_score_handler_sup, start_link, []},permanent, 10000, supervisor, [broker_score_handler_sup]},
 	{result_queue, 
 	        {result_queue,start_link, [{<<"/">>,<<"SCORE_EVERY_BOX">>},<<"mail-testing.com">>,[<<"seb@mail-testing.com">>]]}, 
@@ -44,11 +45,10 @@ init([]) ->
 	 	10000, 
 	 	worker, 
 	 	[result_queue]},
- 	{cowboypub, 
-	 	{cowboypub,start_link, [{<<"/">>,<<"cowboypub">>},<<"mail-testing.com">>]}, 
+ 	{cowboyBIND, 
+	 	{cowboybind,start_link, [{<<"/">>,<<"cowboybind">>},<<"mail-testing.com">>]}, 
 	 	permanent, 
 	 	10000, 
 	 	worker, 
-	 	[cowboypub]}
-	%{cowboypub_sup, {cowboypub_sup, start_link, []}, permanent, 10000, supervisor, [cowboypub_sup]}
+	 	[cowboybind]}
 	]}}.

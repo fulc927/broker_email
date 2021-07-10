@@ -54,15 +54,18 @@ handle_HELO(Hostname, State) ->
             {ok, State} % use the default 10mb limit
     end.
 
-handle_EHLO(Hostname, Extensions, State) ->
-    rabbit_log:info("EMAIL_HANDLER EHLO from ~s~n", [Hostname]),
-    ExtensionsTLS = starttls_extension(Extensions),
-    case application:get_env(broker_email, server_auth) of
-        {ok, false} ->
-            {ok, ExtensionsTLS, set_user_as_anonymous(State,Hostname)};
-        {ok, rabbitmq} ->
-            {ok, [{"AUTH", "PLAIN LOGIN"} | ExtensionsTLS], State}
-    end.
+handle_EHLO(_Hostname, Extensions, State) ->
+	    WithTlsExts = Extensions ++ [{"STARTTLS", true}],
+	        {ok, WithTlsExts, State}.
+%handle_EHLO(Hostname, Extensions, State) ->
+%    rabbit_log:info("EMAIL_HANDLER EHLO from ~s~n", [Hostname]),
+%    ExtensionsTLS = starttls_extension(Extensions),
+%    case application:get_env(broker_email, server_auth) of
+%        {ok, false} ->
+%            {ok, ExtensionsTLS, set_user_as_anonymous(State,Hostname)};
+%        {ok, rabbitmq} ->
+%            {ok, [{"AUTH", "PLAIN LOGIN"} | ExtensionsTLS], State}
+%    end.
 
 set_user_as_anonymous(State,Hostname) ->
     State#state{auth_user=anonymous,hostname_client=Hostname}.
@@ -75,7 +78,8 @@ starttls_extension(Extensions) ->
 
 handle_MAIL(_From, State=#state{auth_user=undefined}) ->
     %rabbit_log:error("EMAIL_HANDLER SMTP authentication is required~n"),
-    {error, ?AUTH_REQUIRED, State};
+    %{error, ?AUTH_REQUIRED, State};
+    {ok, State};
 handle_MAIL(_From, State) ->
     % you can accept or reject the FROM address here
     {ok, State}.
@@ -86,7 +90,8 @@ handle_MAIL_extension(_Extension, _State) ->
 
 handle_RCPT(_From, State=#state{auth_user=undefined}) ->
     %rabbit_log:error("EMAIL_HANDLER SMTP authentication is required~n"),
-    {error, ?AUTH_REQUIRED, State};
+    %{error, ?AUTH_REQUIRED, State};
+    {ok, State};
 handle_RCPT(_To, State) ->
     % you can accept or reject RCPT TO addesses here, one per call
     {ok, State}.
@@ -95,9 +100,6 @@ handle_RCPT_extension(_Extension, _State) ->
     %rabbit_log:warning("EMAIL_HANDLER Unknown RCPT TO extension ~s~n", [Extension]),
     error.
 
-handle_DATA(_From, _To, _Data, #state{auth_user=undefined} = State) ->
-    %rabbit_log:error("EMAIL_HANDLER SMTP authentication is required~n"),
-    {error, ?AUTH_REQUIRED, State};
 handle_DATA(_From, _To, <<>>, State) ->
     {error, "552 Message too small", State};
 handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client=Hostname_client,sender_pid=SenderPid,addr=Address}) ->

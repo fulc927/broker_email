@@ -10,7 +10,7 @@
 -export([start_link/3]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([laliste_increment/1,laliste/2,process_results/6, tothefront/5, tothefront2/5]).
--record(state, {connection, channel,routing_key,id,dkim,received,table,date}).
+-record(state, {connection, channel,routing_key,id,dkim,received,table,date,ip,serveur,payload}).
 -define(FILENAME,"SEBFILE").
 -define(FILENAME2,"SEBFILE2").
 -define(BUILTIN_EXTENSIONS, [{"DKIM_VALID", true}]).
@@ -38,11 +38,12 @@ init([{VHost, Queue}, _Domain, Rkey]) ->
     pick_the_rk(Connection, Queue,[]) -> {ok, Channel} = amqp_connection:open_channel(Connection),
                                      Subscribe = #'basic.consume'{queue=Queue, consumer_tag= <<"otp.fr.eu.org">>, no_ack=true},
                                      #'basic.consume_ok'{} = amqp_channel:call(Channel, Subscribe),
-				     Routing_key="",
-				     Id="",
+				     %Routing_key="",
+				     %Id="",
 				     Date="",
 				     Dkim="",
-                                     State = #state{connection=Connection, channel=Channel,routing_key=Routing_key, id=Id, dkim=Dkim, date=Date},
+                                     %State = #state{connection=Connection, channel=Channel,routing_key=Routing_key, id=Id, dkim=Dkim, date=Date},
+                                     State = #state{connection=Connection, channel=Channel,dkim=Dkim, date=Date},
 				     {ok, State}.
 
 handle_call(_Msg, _From, State) ->
@@ -69,18 +70,21 @@ handle_info({#'basic.deliver'{routing_key=RKey, consumer_tag=_Tag}, Content}, St
     	end,
 	
     #'P_basic'{message_id = _MessageId, headers = Headers } = Properties,
+
     rabbit_log:info("RABBIT_SCORE_PERSO to SPAMASSASSIN ~p" , [Payload]),
     rabbit_log:info("RABBIT_SCORE_PERSO messageid ~p" , [_MessageId]),
     Headers2 = transform_headers(Headers),
     rabbit_log:info("RABBIT_SCORE_PERSO Headers ~s ~n ", [Headers]),
     rabbit_log:info("RABBIT_SCORE_PERSO Headers2 ~s ~n ", [Headers2]),
-
     Date = proplists:get_value(<<"Date">>,Headers2),
     rabbit_log:info("RABBIT_SCORE_PERSO Date ~s ~n ", [Date]),
     De = proplists:get_value(<<"From">>,Headers2),
     rabbit_log:info("RABBIT_SCORE_PERSO De ~s ~n ", [De]),
     Dkim = proplists:get_value(<<"DKIM-Signature">>,Headers2,"Pas de signature DKIM détectée"),
     rabbit_log:info("RABBIT_SCORE_PERSO Headers2 ~s ~n ", [Dkim]),
+    Ip = proplists:get_value(<<"Ip">>,Headers2),
+    Serveur = proplists:get_value(<<"Serveur">>,Headers2),
+
     calcule_score(RKey, Payload),
 
     Table = ets:new(?MODULE, [set, public]),
@@ -89,7 +93,7 @@ handle_info({#'basic.deliver'{routing_key=RKey, consumer_tag=_Tag}, Content}, St
               %PW = ets:match(Table,{Reference2,'$1','$2','$3','$4','$5','$6','$7','$8','$9','$10','$11','$12'}), %$1-2 de $3-4 routing_key, $5-6 date, $7-8 dkim_valid $9-10 spf_pass $11-12 ipv6
 	   %rabbit_log:info("PATTERN ds la BASE ~p ~n",[PW]),
     
-    NewState = State#state{routing_key= RKey, id= Reference2,dkim=Dkim,date=Date,table=Table},
+    NewState = State#state{routing_key= RKey, id= Reference2,dkim=Dkim,date=Date,table=Table,ip=Ip,serveur=Serveur,payload=Payload },
     {noreply,  NewState };
 
 %%On choppe la réponse de SA
@@ -452,12 +456,18 @@ tothefront(State,Id,RoutingKey,Argv,Results) ->
     amqp_channel:call(Channel2, #'exchange.declare'{exchange = <<"pipe_results">>,type = <<"fanout">>, durable = true}),
 	   Dkim = State#state.dkim,
 	   Date = State#state.date,
+	   Payload = State#state.payload,
+	   Ip = State#state.ip,
+	   Serveur = State#state.serveur,
+           rabbit_log:info("tothefront double Ip Serveur ~p ~p ~n",[Ip,Serveur]),
+           rabbit_log:info("tothefront Payload ~p ~p ~n",[Payload]),
 	   %Inedine = [{<<"To">>,longstr,RoutingKey},{<<"Ref">>,signedint,Random},{<<"Dkim">>,longstr,Dkim},{<<"Date">>,longstr,Date},{<<"SPF_PASS">>,signedint,0},{<<"EMPTY_MESSAGE">>,signedint,1},{<<"DKIM_VALID">>,signedint,0}], 
-    	   Results3 = lists:append([[{<<"To">>, longstr, RoutingKey},{<<"Ref">>, signedint , Random},{<<"Dkim">>, longstr , Dkim},{<<"Date">>, longstr , Date}],Results]),
+    	   Results3 = lists:append([[{<<"To">>, longstr, RoutingKey},{<<"Ref">>, signedint , Random},{<<"Dkim">>, longstr , Dkim},{<<"Date">>, longstr , Date},{<<"Ip">>, longstr , Ip},{<<"Serveur">>, longstr , Serveur}],Results]),
     rabbit_log:info("tothefront Results3 en test ~p ~n",[Results3]),
 
     Props = #'P_basic'{delivery_mode = 2, headers = Results3},
-    amqp_channel:cast(Channel2,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = <<"uasrniteaunrtaunur">>}),
+       rabbit_log:info("le Random qui sert de ref ~p ~n",[Argv]),
+    amqp_channel:cast(Channel2,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = Payload}),
 %COMMENT  [{<<"To">>,longstr,<<"c4e4dba4804b6ac3@mail-testing.com">>},{<<"Ref">>,signedint,11375183},{<<"Dkim">>,longstr,"Pas de signature DKIM détectée"},{<<"Date">>,longstr,<<"Thu, 1 Jul 2021 18:40:07 +0200">>},{<<"EMPTY_MESSAGE">>,signedint,1},{<<"DKIM_VALID">>,signedint,1}]
     ok = amqp_channel:close(Channel2),
     ok = amqp_connection:close(Connection2),
