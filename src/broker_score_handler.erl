@@ -282,7 +282,7 @@ parse(Id,State,_RKey,Data) ->
 	   %A = has_extension(Results, ["DKIM_VALID",signedint]),  
            %rabbit_log:info("PARSE SCORE_HANDLER HAS_EXTENSION ~p ~n" , [A]),
 	   %tothefront(State,Id,_RKey,[list_to_binary(Draft_Score)|Results],list_to_tuple(Results)),
-	   tothefront(State,Id,_RKey,[list_to_binary(Draft_Score)|Results],O),
+	   tothefront(State,Id,_RKey,list_to_binary(Draft_Score),O),
 	   Tab = State#state.table,
 	   %tothefront2(State,Tab,Id,_RKey,[list_to_binary(Draft_Score)|Results]),
                {ok, lists:reverse(Results)};
@@ -461,13 +461,15 @@ tothefront(State,Id,RoutingKey,Argv,Results) ->
 	   Serveur = State#state.serveur,
            rabbit_log:info("tothefront double Ip Serveur ~p ~p ~n",[Ip,Serveur]),
            rabbit_log:info("tothefront Payload ~p ~p ~n",[Payload]),
+           rabbit_log:info("le Random qui sert de Argv ~p ~n",[Argv]),
+	   Payload2 = erlang:iolist_to_binary([Payload,<<"<br>">>, Argv]),
+           rabbit_log:info("tothefront Payload2 ~p ~p ~n",[Payload2]),
 	   %Inedine = [{<<"To">>,longstr,RoutingKey},{<<"Ref">>,signedint,Random},{<<"Dkim">>,longstr,Dkim},{<<"Date">>,longstr,Date},{<<"SPF_PASS">>,signedint,0},{<<"EMPTY_MESSAGE">>,signedint,1},{<<"DKIM_VALID">>,signedint,0}], 
     	   Results3 = lists:append([[{<<"To">>, longstr, RoutingKey},{<<"Ref">>, signedint , Random},{<<"Dkim">>, longstr , Dkim},{<<"Date">>, longstr , Date},{<<"Ip">>, longstr , Ip},{<<"Serveur">>, longstr , Serveur}],Results]),
     rabbit_log:info("tothefront Results3 en test ~p ~n",[Results3]),
 
     Props = #'P_basic'{delivery_mode = 2, headers = Results3},
-       rabbit_log:info("le Random qui sert de ref ~p ~n",[Argv]),
-    amqp_channel:cast(Channel2,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = Payload}),
+    amqp_channel:cast(Channel2,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = Payload2}),
 %COMMENT  [{<<"To">>,longstr,<<"c4e4dba4804b6ac3@mail-testing.com">>},{<<"Ref">>,signedint,11375183},{<<"Dkim">>,longstr,"Pas de signature DKIM détectée"},{<<"Date">>,longstr,<<"Thu, 1 Jul 2021 18:40:07 +0200">>},{<<"EMPTY_MESSAGE">>,signedint,1},{<<"DKIM_VALID">>,signedint,1}]
     ok = amqp_channel:close(Channel2),
     ok = amqp_connection:close(Connection2),
