@@ -37,7 +37,7 @@ init(Hostname, SessionCount, Address, Options) when SessionCount < 20 ->
 
     Banner = [Hostname, " ESMTP broker_email_handler"],
     Hostname_client = [],
-    State = #state{hostname=Hostname,hostname_client = Hostname_client, sender_pid=SenderPid, addr=Address, options=Options},
+    State = #state{hostname=Hostname, hostname_client = Hostname_client,sender_pid=SenderPid, addr=Address, options=Options},
     {ok, Banner, State};
 
 init(Hostname, _SessionCount, _Address, _Options) ->
@@ -54,9 +54,15 @@ handle_HELO(Hostname, State) ->
             {ok, State} % use the default 10mb limit
     end.
 
-handle_EHLO(_Hostname, Extensions, State) ->
+handle_EHLO(Hostname, Extensions, State) ->
+    Ip = State#state.addr,
+    SenderPid = State#state.sender_pid,
+    rabbit_log:info("EMAIL_HANDLER EHLO addr ~s~n", [Ip]),
+    rabbit_log:info("EMAIL_HANDLER EHLO from ~s~n", [Hostname]),
+    rabbit_log:info("EMAIL_HANDLER EHLO State ~p~n", [State]),
 	    WithTlsExts = Extensions ++ [{"STARTTLS", true}],
-	        {ok, WithTlsExts, State}.
+            NewState = #state{hostname_client=Hostname,sender_pid=SenderPid,addr=Ip},
+	        {ok, WithTlsExts, NewState}.
 %handle_EHLO(Hostname, Extensions, State) ->
 %    rabbit_log:info("EMAIL_HANDLER EHLO from ~s~n", [Hostname]),
 %    ExtensionsTLS = starttls_extension(Extensions),
@@ -68,7 +74,7 @@ handle_EHLO(_Hostname, Extensions, State) ->
 %    end.
 
 set_user_as_anonymous(State,Hostname) ->
-    State#state{auth_user=anonymous,hostname_client=Hostname}.
+    State#state{auth_user=anonymous,hostname=Hostname}.
 
 starttls_extension(Extensions) ->
     case application:get_env(broker_email, server_starttls) of
@@ -102,7 +108,7 @@ handle_RCPT_extension(_Extension, _State) ->
 
 handle_DATA(_From, _To, <<>>, State) ->
     {error, "552 Message too small", State};
-handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client=Hostname_client,sender_pid=SenderPid,addr=Address}) ->
+handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client = Hostname_client,sender_pid=SenderPid,addr=Address}) ->
     % some kind of unique id
     Reference = lists:flatten([io_lib:format("~2.16.0b", [X]) || <<X>> <= erlang:md5(term_to_binary(os:timestamp()))]),
             rabbit_log:info("EMAIL_HANDLER FILTER Hostname ~s ~n", [Hostname]),

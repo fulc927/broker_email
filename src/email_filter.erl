@@ -10,6 +10,8 @@
 -export([extract_payload/3]).
 
 extract_payload(Data,Rabout1,Rabout2) ->
+    rabbit_log:info("FILTER Extract_payload Server ~p ~n",[Rabout1]),
+    rabbit_log:info("FILTER Extract_payload Ip ~p ~n",[Rabout2]),
     case application:get_env(broker_email, email_filter) of
         % filtering is disable, just pass on the entire e-mail
         {ok, false} ->
@@ -33,7 +35,9 @@ extract_payload(Data,Rabout1,Rabout2) ->
 extract_headers(Headers, Params,Server,Ip) ->
         ContentTypeParams = proplists:get_value(<<"content-type-params">>, Params, []),
         AllHeaders = lists:merge(Headers, ContentTypeParams),
+    rabbit_log:info("FILTER AllHeaders ~p ~n",[AllHeaders]),
 AllHeaders_transient = lists:merge(AllHeaders,[{<<"Serveur">>,Server}]),
+    rabbit_log:info("FILTER le Server ~p ~n",[Server]),
 AllHeaders_final = lists:merge(AllHeaders_transient,[{<<"Ip">>,list_to_binary(Ip)}]),
 	rabbit_log:info("700 FILTER le AllHeaders_final qui doit contenir tous les headers du mess ~p ~n",[AllHeaders_final]),
         lists:filter(fun filter_header/1, AllHeaders_final).
