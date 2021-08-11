@@ -21,6 +21,10 @@ stop(_State) ->
     ok.
 
 init([]) ->
+    %ETS initialization
+   %?MODULE = ets:new(?MODULE, [named_table, ordered_set, public]),
+   DB =  ets:new(broker_email_app, [named_table, ordered_set, public]),
+   rabbit_log:info("BROKER_EMAIL_APP ~p ~n",[DB]), 
     % check for optional dependencies
     case erlang:function_exported(eiconv, conv, 2) of
         true -> rabbit_log:info("eiconv detected: content trancoding is enabled");
@@ -45,7 +49,13 @@ init([]) ->
 	 	10000, 
 	 	worker, 
 	 	[result_queue]},
- 	{cowboyBIND, 
+	  #{id => store_and_dispatch,
+             start =>  {store_and_dispatch, start_link, []},
+             restart =>  permanent,
+            shutdown => 10000,
+           type =>  worker,
+           module => [store_and_dispatch]},	   
+{cowboyBIND, 
 	 	{cowboybind,start_link, [{<<"/">>,<<"cowboybind">>},<<"mail-testing.com">>]}, 
 	 	permanent, 
 	 	10000, 

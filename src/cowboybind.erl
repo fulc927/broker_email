@@ -80,8 +80,17 @@ handle_info({#'basic.deliver'{routing_key=Key, consumer_tag=Tag}, Content}, Stat
     try
         catch #'queue.bind_ok'{} = amqp_channel:call(Channel, Binding) 
     after
-        catch amqp_channel:close(Channel)
+           catch amqp_channel:close(Channel)
     end,
+   
+    %%SEB TIMEOUT
+    rabbit_log:info("GOT A INSERT FROM COWBOY !!! ~p ~n",[Payload]),
+     gen_server:cast(store_and_dispatch, {insert,Payload}),
+     timer:sleep(60000),
+    rabbit_log:info("COWBOY TIMEOUT au bout de 60s ~n"),
+     gen_server:cast(store_and_dispatch, {delete,Payload}),
+   %SEB
+
     %ok = amqp_channel:close(Channel),
     %ok = amqp_connection:close(Connection),
     %PARTIE INEFFECTIVE

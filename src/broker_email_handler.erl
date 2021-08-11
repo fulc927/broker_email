@@ -13,7 +13,7 @@
 -behaviour(gen_smtp_server_session).
 
 -export([init/4, handle_HELO/2, handle_EHLO/3, handle_MAIL/2, handle_MAIL_extension/2,
-    handle_RCPT/2, handle_RCPT_extension/2, handle_DATA/4, handle_RSET/1, handle_VRFY/2,
+    handle_RCPT/3, handle_RCPT_extension/2, handle_DATA/4, handle_RSET/1, handle_VRFY/2,
     handle_other/3, handle_AUTH/4, handle_STARTTLS/1, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -94,11 +94,16 @@ handle_MAIL_extension(_Extension, _State) ->
     %rabbit_log:warning("EMAIL_HANDLER Unknown MAIL FROM extension ~s~n", [Extension]),
     error.
 
-handle_RCPT(_From, State=#state{auth_user=undefined}) ->
-    %rabbit_log:error("EMAIL_HANDLER SMTP authentication is required~n"),
-    %{error, ?AUTH_REQUIRED, State};
-    {ok, State};
-handle_RCPT(_To, State) ->
+%handle_RCPT(_From, State=#state{auth_user=undefined}) ->
+%    rabbit_log:error("EMAIL_HANDLER SMTP authentication is not required~n"),
+%    %{error, ?AUTH_REQUIRED, State};
+%    {ok, State};
+handle_RCPT(To, State, []) ->
+    rabbit_log:info("EMAIL_HANDLER handle_RCPT Blacklisted ~p ~n", [To]),
+    % you can accept or reject RCPT TO addesses here, one per call
+    {error, <<"Not permitted to enter">>, State};
+handle_RCPT(To, State, _) ->
+    rabbit_log:info("EMAIL_HANDLER handle_RCPT Whitelisted ~p ~n", [To]),
     % you can accept or reject RCPT TO addesses here, one per call
     {ok, State}.
 
@@ -182,6 +187,7 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 terminate(Reason, #state{sender_pid=SenderPid} = State) ->
+    rabbit_log:warning("BROKER_EMAIL_HANDLER terminate ~n"),
     gen_server:cast(SenderPid, stop),
     {ok, Reason, State}.
 
