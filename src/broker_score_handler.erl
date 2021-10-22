@@ -9,7 +9,7 @@
 
 -export([start_link/3]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([laliste_increment/1,laliste/2,process_results/6, tothefront/5, tothefront2/5]).
+-export([laliste_increment/1,laliste/2,process_results/6, tothefront/5 ]).
 -record(state, {connection, channel,routing_key,id,dkim,received,table,date,ip,serveur,payload}).
 -define(FILENAME,"SEBFILE").
 -define(FILENAME2,"SEBFILE2").
@@ -36,7 +36,7 @@ init([{VHost, Queue}, _Domain, Rkey]) ->
                 #'queue.bind_ok'{} = amqp_channel:call(Channel, Binding),
     pick_the_rk(Connection, Queue, T);
     pick_the_rk(Connection, Queue,[]) -> {ok, Channel} = amqp_connection:open_channel(Connection),
-                                     Subscribe = #'basic.consume'{queue=Queue, consumer_tag= <<"otp.fr.eu.org">>, no_ack=true},
+                                     Subscribe = #'basic.consume'{queue=Queue, consumer_tag= <<"mail-testing.com">>, no_ack=true},
                                      #'basic.consume_ok'{} = amqp_channel:call(Channel, Subscribe),
 				     %Routing_key="",
 				     %Id="",
@@ -153,7 +153,7 @@ has_extension(Exts, Ext) ->
 	Extension = string:to_upper(Ext),
 	%_Extensions = [{string:to_upper(X), Y} || {X, Y} <- Exts],
 	%io:format("extensions ~p~n", [Extensions]),
-	_Exteeensions = [{"EMPTY_MESSAGE",true},{"DKIM_VALID",signedint,true}],
+	%_Exteeensions = [{"EMPTY_MESSAGE",true},{"DKIM_VALID",signedint,true}],
 	%case proplists:get_value(Extension, [{"SIZE", "10485670"}, {"DKIM_VALID", true}, {"PIPELINING", true}]) of
 	case proplists:get_value(Extension, Exts) of
 		undefined ->
@@ -170,8 +170,8 @@ laliste([A|As],T) ->
 
 %SUPER RESULTS 2  [{"EMPTY_MESSAGE",signedint,[1]},{"SPF_PASS",signedint,[1]},{"DKIM_VALID",signedint,[0]}]
 laliste_increment([B|Bs]) ->
-%	%{list_to_binary(B),signedint,list_to_binary(Bs)}.
-	{list_to_binary(B),signedint,lists:last(Bs)}.
+	%{list_to_binary(B),signedint,lists:last(Bs)}.
+	{list_to_binary(B),longstr,lists:last(Bs)}.
 
 parse(Id,State,_RKey,Data) ->
                 {ok, Line, Rest} = erlang:decode_packet(line, Data, []),
@@ -239,11 +239,11 @@ parse(Id,State,_RKey,Data) ->
 				   %true;
 		false ->
 				   rabbit_log:info("HAS_EXTENSION LA que je rajoute DKIM_VALID a zero car le message contient des data"),
-				   Empty = [{"EMPTY_MESSAGE",0} | Results],
+				   Empty = [{"EMPTY_MESSAGE",<<"y a de la data dans le corps du mail">>} | Results],
 				   %true
 				  Empty 
 		end,
-	   rabbit_log:info("PARSE SCORE_HANDLER process_results Empty_message ~p ~n" , [Empty_message]),
+	   %rabbit_log:info("PARSE SCORE_HANDLER process_results Empty_message ~p ~n" , [Empty_message]),
 	   Dkim_message = case has_extension(Empty_message, "DKIM_VALID") of  
 		{true, Value2} ->
 				   rabbit_log:info("HAS_EXTENSION PAS LA ~p ~n",[Value2]),
@@ -251,10 +251,12 @@ parse(Id,State,_RKey,Data) ->
 				   %true;
 		false ->
 				   rabbit_log:info("HAS_EXTENSION LA que je rajoute EMPTY_MESSAGE a zero car le message contient des data"),
-				   Dkim = [{"DKIM_VALID",0} | Empty_message],
+				   %Dkim = [{"DKIM_VALID",0} | Empty_message],
+				   Dkim = [{"DKIM_VALID",<<"Le Dkim est pas bon">>} | Empty_message],
 				   %true
 				  Dkim 
 		end,
+	   rabbit_log:info("PARSE SCORE_HANDLER SEBDK process_results Dkim_massage ~p ~n" , [Dkim_message]),
 	   Spf_message = case has_extension(Dkim_message, "SPF_PASS") of  
 		{true, Value3} ->
 				   rabbit_log:info("HAS_EXTENSION PAS LA ~p ~n",[Value3]),
@@ -262,16 +264,33 @@ parse(Id,State,_RKey,Data) ->
 				   %true;
 		false ->
 				   rabbit_log:info("HAS_EXTENSION LA que je rajoute EMPTY_MESSAGE a zero car le message contient des data"),
-				   Spf = [{"SPF_PASS",0} | Dkim_message],
+				   %Spf = [{"SPF_PASS",0} | Dkim_message],
+				   Spf = [{"SPF_PASS",<<"Y a pas SPF">>} | Dkim_message],
 				   %true
 				   Spf
 		end,
 
 
 	   rabbit_log:info("PARSE SCORE_HANDLER process_results RESULTS empty_message ~p ~n" , [Empty_message]),
-	   rabbit_log:info("PARSE SCORE_HANDLER process_results SUPER RESULTS  ~p ~n" , [Spf_message]),
-	   Spf_message_sort = lists:sort(Spf_message),
-	   rabbit_log:info("PARSE SCORE_HANDLER process_results SUPER RESULTS sorted !  ~p ~n" , [Spf_message_sort]),
+	   rabbit_log:info("PARSE SCORE_HANDLER process_results Spf_message  ~p ~n" , [Spf_message]),
+	   Spf2_message = case has_extension(Spf_message, "SPF_PASS\r\n") of  
+		{true, Value4} ->
+				   rabbit_log:info("HAS_EXTENSION PAS LA ~p ~n",[Value4]),
+				   Spf_message;
+				   %true;
+		false ->
+				   rabbit_log:info("HAS_EXTENSION LA que je rajoute EMPTY_MESSAGE a zero car le message contient des data"),
+				   %Spf2 = [{"SPF_PASS",0} | Spf_message],
+				   Spf2 = [{"SPF_PASS",<<"y a pas SPF 2">>} | Spf_message],
+				   %true
+				   Spf2
+		end,
+
+
+	   rabbit_log:info("PARSE SCORE_HANDLER  Spf_message  ~p ~n" , [Spf_message]),
+	   rabbit_log:info("PARSE SCORE_HANDLER  Spf2_message  ~p ~n" , [Spf2_message]),
+	   Spf_message_sort = lists:sort(Spf2_message),
+	   rabbit_log:info("PARSE SCORE_HANDLER process_results Spf_fuckouff ~p ~n" , [Spf_message_sort]),
 	   %SUPER RESULT [{"SPF_PASS",0},{"EMPTY_MESSAGE",1},{"DKIM_VALID",1}]
 
 	   %O = laliste(Spf_message,[]),
@@ -288,11 +307,11 @@ parse(Id,State,_RKey,Data) ->
                {ok, lists:reverse(Results)};
 
 	   process_results(Id,State,_RKey,[V="EMPTY_MESSAGE"|T],Draft_Score, Results) ->
-           process_results(Id,State,_RKey,T,Draft_Score, [{V,1}|Results]),
+           process_results(Id,State,_RKey,T,Draft_Score, [{V,<<"Y a rien dans ton message">>}|Results]),
 	   rabbit_log:info("CHOPPE LE EMPTY_MESSAGE ~p" , [Results]);
 
 	   process_results(Id,State,_RKey,[V="DKIM_VALID"|T],Draft_Score, Results) ->
-           process_results(Id,State,_RKey,T,Draft_Score, [{V,1}|Results]),
+           process_results(Id,State,_RKey,T,Draft_Score, [{V,<<"Dkim valid est ok">>}|Results]),
            %case ets:new(?MODULE, [{file, ?FILENAME},{type,set}]) of
 	   Tab = State#state.table,
    	   ets:update_counter(Tab,Id,{13,1}),
@@ -301,25 +320,18 @@ parse(Id,State,_RKey,Data) ->
 	   rabbit_log:info("LE Table lookup ~p" , [ets:lookup(Tab, Id)]),
 	   rabbit_log:info("CHOPPE LE DKIM_VALID ~p" , [Results]);
 	  
-%	   process_results(Id,State,_RKey,[V="SPF_PASS"|T],Draft_Score,Results) ->
-%           %process_results(Id,State,_RKey,T,Draft_Score, [V|Results]),
-%           process_results(Id,State,_RKey,T,Draft_Score, [{V,"true"}|Results]),
-%	   %case ets:open_file(?MODULE, [{file, ?FILENAME},{type,set}]) of
-%	   %case ets:new(?MODULE, [{file, ?FILENAME},{type,set}]) of
-%  	   Tab = State#state.table,
+	   %process_results(Id,State,_RKey,[V="SPF_PASS\r\n"|T],Draft_Score,Results) ->
+           %process_results(Id,State,_RKey,T,Draft_Score, [{V,1}|Results]),
 %   	   ets:update_counter(Tab,Id,{16,1}),
-%	   %	{ok, Ref} -> ets:update_counter(?MODULE,Id,{11,1});
-%   	   %	{error, Reason}=E -> rabbit_log:info("Unable to open database file: ~p~n", [E]) end,
-%           rabbit_log:info("CHOPPE LE SPF_PASS VALID ~p" , [Results]);
+           %rabbit_log:info("CHOPPE LE SPF_PASS VALID ~p" , [Results]);
 
 	   process_results(Id,State,_RKey,[V="SPF_PASS"|T],Draft_Score,Results) ->
-           process_results(Id,State,_RKey,T,Draft_Score, [{V,1}|Results]),
-	   %case ets:new(?MODULE, [{file, ?FILENAME},{type,set}]) of
-   	   Tab = State#state.table,
-   	   ets:update_counter(Tab,Id,{16,1}),
-	   %	{ok, Ref} -> ets:update_counter(?MODULE,Id,{11,1});
-   	   %	{error, Reason}=E -> rabbit_log:info("Unable to open database file: ~p~n", [E]) end,
-           rabbit_log:info("CHOPPE LE SPF_PASS\\r\\n VALID ~p" , [Results]);
+           process_results(Id,State,_RKey,T,Draft_Score, [{V,<<"SPF est bien présent en bon et due forme">>}|Results]),
+           rabbit_log:info("CHOPPE LE SPF_PASS VALID ~p" , [Results]);
+
+	   process_results(Id,State,_RKey,[V="SPF_PASS\r\n"|T],Draft_Score,Results) ->
+           process_results(Id,State,_RKey,T,Draft_Score, [{"SPF_PASS",<<"SPF 2 est bien présent en bon et due forme">>}|Results]),
+           rabbit_log:info("zarb CHOPPE LE SPF_PASS\\r\\n VALID ~p" , [Results]);
 
 	   %process_results(Id,State,_RKey,[V="MISSING_SUBJECT"|T],Draft_Score, Results) ->
            %process_results(Id,State,_RKey,T,Draft_Score, [list_to_binary(V)|Results]),
@@ -389,30 +401,6 @@ parse(Id,State,_RKey,Data) ->
            process_results(Id,State,_RKey,[_|T],Draft_Score, Results) ->
            process_results(Id,State,_RKey,T,Draft_Score,Results).
 
-tothefront2(State,Tab,Id,RoutingKey,Argv) ->
-
-       Random = crypto:bytes_to_integer(crypto:strong_rand_bytes(3)),
-       io:format("le Random qui sert de ref ~p ~n",[Random]),
-
-		{ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
-    		{ok, Connection} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = <<"/">>, host = Host, port = Port}),
-    		{ok, Channel} = amqp_connection:open_channel(Connection),
-    		amqp_channel:call(Channel, #'exchange.declare'{exchange = <<"pipe_results">>,type = <<"fanout">>, durable = true}),
-                %Props = #'P_basic'{delivery_mode = 2, headers = [{<<"To">>, longstr, RoutingKey},{<<"Toooo">>, longstr, RoutingKey}]},
-	        L = ets:lookup(Tab, Id),
-	        Smart = func(L),
-    	        rabbit_log:info("Lookup from table ~p~n", [L]),
-		rabbit_log:info("Headers ready ~p ~n",[Smart]),
-                %Props = #'P_basic'{delivery_mode = 2, headers = func(L)},
-                %Props = #'P_basic'{delivery_mode = 2, headers = [{<<"De">>,longstr,<<"sebastien BRICE <sebastien.brice@opentelecom.fr>">>},{<<"Routing_key">>,longstr,<<"seb@mail-testing.com">>},{<<"Date">>,longstr,<<"Tue, 25 May 2021 21:30:54 +0200">>},{<<"Dkim_valid">>,longstr,1},{<<"Spf_pass">>,longstr,1},{<<"Ipv6">>,longstr,1}]},
-                %Props = #'P_basic'{delivery_mode = 2, headers = [{<<"to">>, longstr, RoutingKey},{<<"dkim_valid">>, signedint, 1}]},
-                Props = #'P_basic'{delivery_mode = 2, headers = [{<<"To">>, longstr, RoutingKey},{<<"Ref">>, signedint , Random} ]},
-    		%amqp_channel:cast(Channel,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = <<"{\"name\":\"Tom\",\"age\":10}">>}),
-    		amqp_channel:cast(Channel,#'basic.publish'{exchange = <<"pipe_results">>},#amqp_msg{props = Props,payload = Argv}),
-    		ok = amqp_channel:close(Channel),
-    		ok = amqp_connection:close(Connection),
-    		ok.
-
 func([T]) ->
         V = tuple_to_list(T),
 %       io:format("V func1 ~p ~n",[V]),
@@ -424,6 +412,7 @@ func2([H|U]) ->
 
 tothefront(State,Id,RoutingKey,Argv,Results) ->
 
+       io:format("ZARB ~p ~n",[Results]),
     %% SNIPPET IMPORTANT
     %%log en base couchdb
     %{ok, Server} = couchdb:server_record(<<"http://localhost:5984">>),

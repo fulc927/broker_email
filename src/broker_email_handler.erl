@@ -34,6 +34,7 @@ init(Hostname, SessionCount, Address, Options) when SessionCount < 20 ->
     rabbit_log:info("~s EMAIL_HANDLER SMTP connection from Domain et Address ~p~n", [Hostname, Address]),
     process_flag(trap_exit, true),
     {ok, SenderPid} = broker_message_sender:start_link(Hostname),
+    %{ok, SenderPid2} = broker_message2_sender:start_link(Hostname),
 
     Banner = [Hostname, " ESMTP broker_email_handler"],
     Hostname_client = [],

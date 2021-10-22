@@ -11,6 +11,7 @@ start() ->
   gen_server:start({local, store_and_dispatch}, store_and_dispatch, [], []).
 
 init([]) ->
+ ets:insert(broker_email_app, {<<"admin@mail-testing.com">>}),
  State  = [],
   {ok, State}.
 

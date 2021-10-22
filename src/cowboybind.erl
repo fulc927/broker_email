@@ -15,13 +15,14 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     terminate/2, code_change/3]).
 
--record(state, {connection,channel,payload}).
+-record(state, {connection,channel,payload,sender_pid}).
 -define(INTERVAL, 5000). % One minute
 
 start_link({VHost, Queue}, Domain) ->
     gen_server:start_link(?MODULE, [{VHost, Queue}, Domain], []).
 
 init([{VHost, Queue}, Domain]) ->
+    {ok, SenderPid} = timeout:start(),
     process_flag(trap_exit, true),
     erlang:send_after(?INTERVAL, self(), trigger),
     {ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
@@ -37,7 +38,8 @@ init([{VHost, Queue}, Domain]) ->
     Subscribe = #'basic.consume'{queue=Queue, consumer_tag=Domain, no_ack=true},
     #'basic.consume_ok'{} = amqp_channel:call(Channel, Subscribe),
 
-    State = #state{connection=Connection, channel=Channel},
+
+    State = #state{connection=Connection, channel=Channel,sender_pid=SenderPid},
     {ok, State}.
 
 try_declaring_queue(Connection, Queue) ->
@@ -64,7 +66,7 @@ handle_info(#'basic.cancel_ok'{}, State) ->
     {noreply, State};
 
 %% A delivery
-handle_info({#'basic.deliver'{routing_key=Key, consumer_tag=Tag}, Content}, State) ->
+handle_info({#'basic.deliver'{routing_key=Key, consumer_tag=Tag}, Content}, State=#state{sender_pid=SenderPid}) ->
     #amqp_msg{props = Properties, payload = Payload} = Content,
     #'P_basic'{message_id = MessageId, headers = Headers} = Properties,
 
@@ -74,22 +76,23 @@ handle_info({#'basic.deliver'{routing_key=Key, consumer_tag=Tag}, Content}, Stat
     {ok, Connection} = amqp_connection:start(#amqp_params_direct{virtual_host= <<"/">>}),
     {ok, Channel} = amqp_connection:open_channel(Connection),
 
-    Binding = #'queue.bind'{queue       = <<"incoming_mailtesting">>,
-			    exchange    = <<"email-in">>,
-			    routing_key = Payload},
-    try
-        catch #'queue.bind_ok'{} = amqp_channel:call(Channel, Binding) 
-    after
-           catch amqp_channel:close(Channel)
-    end,
+    %Binding = #'queue.bind'{queue       = <<"incoming_mailtesting">>,
+%			    exchange    = <<"email-in">>,
+%			    routing_key = Payload},
+%    try
+%        catch #'queue.bind_ok'{} = amqp_channel:call(Channel, Binding) 
+%    after
+%           catch amqp_channel:close(Channel)
+%    end,
    
     %%SEB TIMEOUT
     rabbit_log:info("GOT A INSERT FROM COWBOY !!! ~p ~n",[Payload]),
-     gen_server:cast(store_and_dispatch, {insert,Payload}),
-     timer:sleep(60000),
-    rabbit_log:info("COWBOY TIMEOUT au bout de 60s ~n"),
-     gen_server:cast(store_and_dispatch, {delete,Payload}),
-   %SEB
+    gen_server:cast(store_and_dispatch, {insert,Payload}),
+    %timeout:start_link(Payload),
+    gen_server:cast(SenderPid, {timeo,Payload}),
+    %rabbit_log:info("COWBOY TIMEOUT au bout de 60s ~n"),
+    %gen_server:cast(store_and_dispatch, {delete,Payload}),
+    %SEB
 
     %ok = amqp_channel:close(Channel),
     %ok = amqp_connection:close(Connection),
