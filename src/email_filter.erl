@@ -9,6 +9,8 @@
 -module(email_filter).
 -export([extract_payload/3]).
 
+%Rabout 3 va etre la chaine TLS si le client a accepté de passer en TLS
+%extract_payload(Data,Rabout1,Rabout2,Rabout3) ->
 extract_payload(Data,Rabout1,Rabout2) ->
     rabbit_log:info("FILTER Extract_payload Server ~p ~n",[Rabout1]),
     rabbit_log:info("FILTER Extract_payload Ip ~p ~n",[Rabout2]),

@@ -14,7 +14,7 @@
 
 -export([init/4, handle_HELO/2, handle_EHLO/3, handle_MAIL/2, handle_MAIL_extension/2,
     handle_RCPT/3, handle_RCPT_extension/2, handle_DATA/4, handle_RSET/1, handle_VRFY/2,
-    handle_other/3, handle_AUTH/4, handle_STARTTLS/1, handle_info/2,
+    handle_other/3, handle_AUTH/4, handle_STARTTLS/2, handle_info/2,
     code_change/3, terminate/2]).
 
 -record(state, {
@@ -22,9 +22,12 @@
     hostname_client,
     auth_user,
     sender_pid,
+    sender_pid2,
     %du state pour prendre en compte le champs (enveloppe-from) dans Received
     addr = <<>> :: binary(),
-    options = [] :: list() }).
+    chiffre,
+    options = [] :: list()
+	 }).
 
 -define(AUTH_REQUIRED, "530 SMTP authentication is required").
 -include_lib("kernel/include/logger.hrl").
@@ -34,11 +37,14 @@ init(Hostname, SessionCount, Address, Options) when SessionCount < 20 ->
     rabbit_log:info("~s EMAIL_HANDLER SMTP connection from Domain et Address ~p~n", [Hostname, Address]),
     process_flag(trap_exit, true),
     {ok, SenderPid} = broker_message_sender:start_link(Hostname),
-    %{ok, SenderPid2} = broker_message2_sender:start_link(Hostname),
+    rabbit_log:info("~s EMAIL_HANDLER SenderPid ~p~n", [SenderPid]),
+    {ok, SenderPid2} = broker_message2_sender:start_link(Hostname),
+    rabbit_log:info("~s EMAIL_HANDLER SenderPid2 ~p~n", [SenderPid2]),
 
     Banner = [Hostname, " ESMTP broker_email_handler"],
     Hostname_client = [],
-    State = #state{hostname=Hostname, hostname_client = Hostname_client,sender_pid=SenderPid, addr=Address, options=Options},
+    Chiffre = [],
+    State = #state{hostname=Hostname, hostname_client = Hostname_client,sender_pid=SenderPid, sender_pid2=SenderPid2, addr=Address, chiffre=Chiffre, options=Options},
     {ok, Banner, State};
 
 init(Hostname, _SessionCount, _Address, _Options) ->
@@ -58,11 +64,14 @@ handle_HELO(Hostname, State) ->
 handle_EHLO(Hostname, Extensions, State) ->
     Ip = State#state.addr,
     SenderPid = State#state.sender_pid,
+    SenderPid2 = State#state.sender_pid2,
     rabbit_log:info("EMAIL_HANDLER EHLO addr ~s~n", [Ip]),
     rabbit_log:info("EMAIL_HANDLER EHLO from ~s~n", [Hostname]),
     rabbit_log:info("EMAIL_HANDLER EHLO State ~p~n", [State]),
+    rabbit_log:info("EMAIL_HANDLER EHLO SenderPid ~p~n", [SenderPid]),
+    rabbit_log:info("EMAIL_HANDLER EHLO SenderPid2 ~p~n", [SenderPid2]),
 	    WithTlsExts = Extensions ++ [{"STARTTLS", true}],
-            NewState = #state{hostname_client=Hostname,sender_pid=SenderPid,addr=Ip},
+            NewState = #state{hostname_client=Hostname,addr=Ip,sender_pid=SenderPid,sender_pid2=SenderPid2},
 	        {ok, WithTlsExts, NewState}.
 %handle_EHLO(Hostname, Extensions, State) ->
 %    rabbit_log:info("EMAIL_HANDLER EHLO from ~s~n", [Hostname]),
@@ -114,7 +123,7 @@ handle_RCPT_extension(_Extension, _State) ->
 
 handle_DATA(_From, _To, <<>>, State) ->
     {error, "552 Message too small", State};
-handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client = Hostname_client,sender_pid=SenderPid,addr=Address}) ->
+handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client = Hostname_client,sender_pid=SenderPid,sender_pid2=_SenderPid2,addr=Address}) ->
     % some kind of unique id
     Reference = lists:flatten([io_lib:format("~2.16.0b", [X]) || <<X>> <= erlang:md5(term_to_binary(os:timestamp()))]),
             rabbit_log:info("EMAIL_HANDLER FILTER Hostname ~s ~n", [Hostname]),
@@ -129,6 +138,7 @@ handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client = Ho
             %rabbit_log:info("EMAIL_HANDLER raboutage FIRSTS ~s ~n", [NewHeaders]),
 
    	    gen_server:cast(SenderPid, {Reference, To, <<"application/mime">>, Headers, Data, _From}),
+   	    %gen_server:cast(SenderPid2, {Reference, To, <<"application/mime">>, Headers, Data, _From}),
             {ok, Reference, State};
         error ->
             {error, "554 Message cannot be delivered", State}
@@ -169,12 +179,18 @@ handle_AUTH('cram-md5', <<"username">>, {Digest, Seed}, State) ->
 handle_AUTH(_Type, _Username, _Password, _State) ->
     error.
 
-handle_STARTTLS(State) ->
-    rabbit_log:info("EMAIL_HANDLER TLS Started~n"),
-    State.
+handle_STARTTLS(Chiffre,State) ->
+    rabbit_log:info("EMAIL_HANDLER TLS Started ~p ~n",[Chiffre]),
+    %Chiffre = State#state.chiffre,
+    NewState = #state{chiffre=Chiffre},
+    NewState.
 
 handle_info({'EXIT', SenderPid, _Reason}, #state{sender_pid=SenderPid} = State) ->
     % sender failed, we terminate as well
+    {stop, normal, State};
+
+handle_info({'EXIT', SenderPid2, _Reason}, #state{sender_pid=SenderPid2} = State) ->
+    % sender2 failed, we terminate as well
     {stop, normal, State};
 
 handle_info({'EXIT', _, normal}, State) ->
@@ -187,9 +203,10 @@ handle_info(Info, State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-terminate(Reason, #state{sender_pid=SenderPid} = State) ->
+terminate(Reason, #state{sender_pid=SenderPid,sender_pid2=SenderPid2} = State) ->
     rabbit_log:warning("BROKER_EMAIL_HANDLER terminate ~n"),
     gen_server:cast(SenderPid, stop),
+    gen_server:cast(SenderPid2, stop),
     {ok, Reason, State}.
 
 % end of file

@@ -20,6 +20,7 @@ start_link(Domain) ->
     gen_server:start_link(?MODULE, [Domain], []).
 
 init([Domain]) ->
+	rabbit_log:info("MESSAGE2 HELLOO"),
 	rabbit_log:info("MESSAGE2_SENDER_Domain ~p ~n",[Domain]),
     {ok, Domains} = application:get_env(broker_email, email_domains),
 	rabbit_log:info("MESSAGE2_SENDER_DomainS ~p ~n",[Domains]),

@@ -19,31 +19,26 @@ start_link({VHost, Queue}, Domain, Rkey) ->
 
 init([{VHost, Queue}, Domain, Rkey]) ->
 	process_flag(trap_exit, true),
-	{ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
-	io:format("broker_email Username ~p ~n",[Username]),
-    	{ok, Connection} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = <<"/">>, host = Host, port = Port}),
-
+	%{ok,Cred = [Username,Password,Host,Port]} = application:get_env(broker_email, credentials),
+	%io:format("broker_email Username ~p ~n",[Username]),
+	{ok, Connection} = amqp_connection:start(#amqp_params_direct{virtual_host= VHost}),
+    	%{ok, Connection} = amqp_connection:start(#amqp_params_network{username = Username, password = Password,virtual_host = <<"/">>, host = Host, port = Port}),
 	pick_the_rk(Connection, Queue, Rkey).
     	pick_the_rk(Connection, Queue, [H|T]) ->
            {ok, Channel} = amqp_connection:open_channel(Connection),
            %amqp_channel:call(Channel, #'queue.declare'{queue=Queue, durable=true,auto_delete=false}),
            amqp_channel:call(Channel, #'queue.declare'{queue=Queue, durable=true, auto_delete=false}),
                 Binding = #'queue.bind'{queue   = Queue,
-                            exchange    = <<"pipe_results">>,
+                            exchange    = <<"email-out">>,
                             routing_key = H},
                 #'queue.bind_ok'{} = amqp_channel:call(Channel, Binding),
     	pick_the_rk(Connection, Queue, T);
     	pick_the_rk(Connection, Queue,[]) -> 
 				     {ok, Channel} = amqp_connection:open_channel(Connection),
-                                     %Subscribe = #'basic.consume'{queue=Queue, consumer_tag= <<"mail-testing.com">>, no_ack=true},
-                                     %#'basic.consume_ok'{} = amqp_channel:call(Channel, Subscribe),
-				     %{ok, State}.
+                                     Subscribe = #'basic.consume'{queue=Queue, consumer_tag= <<"mail-testing.com">>, no_ack=true},
+                                     #'basic.consume_ok'{} = amqp_channel:call(Channel, Subscribe),
 					State = #state{connection=Connection, channel=Channel},
     					{ok, State}.
-
-
-
-
 
 handle_call(_Msg, _From, State) ->
     {reply, unknown_command, State}.
@@ -56,7 +51,9 @@ handle_info(#'basic.consume_ok'{}, State) ->
     {noreply, State};
 
 handle_info({#'basic.deliver'{routing_key=RKey, consumer_tag=_Tag}, Content}, State) ->
-	rabbit_log:info("Pour l instant et vu qu on a pas de consumer rien a PATTERN MATCHER"),
+        #amqp_msg{props = Properties, payload = Payload} = Content,
+	%send_email(To, Domain, {Type, Subtype}, Headers, Payload) ->
+	rabbit_log:info("Pour l instant et vu qu on a pas de consumer rien a PATTERN MATCHER ~p ~n",[Payload]),
     {noreply, State};
 
 %% This is received when the subscription is cancelled
