@@ -50,7 +50,7 @@ handle_call(_Msg, _From, State) ->
     {reply, unknown_command, State}.
 
 handle_cast({Reference, To, ContentType, Headers, Body, _From}, #state{channel=Channel, exchange=Exchange}=State) ->
-    rabbit_log:info(" SENDERHEADERS ~p ~n", [Headers]),
+    rabbit_log:info(" SENDERHEADERS2 ~p ~n", [Headers]),
     rabbit_log:info(" SENDERchannel2 ~p ~n", [Channel]),
     lists:foreach(
         fun(Address) ->

@@ -14,7 +14,7 @@
 
 -export([init/4, handle_HELO/2, handle_EHLO/3, handle_MAIL/2, handle_MAIL_extension/2,
     handle_RCPT/3, handle_RCPT_extension/2, handle_DATA/4, handle_RSET/1, handle_VRFY/2,
-    handle_other/3, handle_AUTH/4, handle_STARTTLS/2, handle_info/2,
+    handle_other/3, handle_AUTH/4, handle_STARTTLS/1, handle_info/2,
     code_change/3, terminate/2]).
 
 -record(state, {
@@ -25,7 +25,6 @@
     sender_pid2,
     %du state pour prendre en compte le champs (enveloppe-from) dans Received
     addr = <<>> :: binary(),
-    chiffre,
     options = [] :: list()
 	 }).
 
@@ -44,7 +43,7 @@ init(Hostname, SessionCount, Address, Options) when SessionCount < 20 ->
     Banner = [Hostname, " ESMTP broker_email_handler"],
     Hostname_client = [],
     Chiffre = [],
-    State = #state{hostname=Hostname, hostname_client = Hostname_client,sender_pid=SenderPid, sender_pid2=SenderPid2, addr=Address, chiffre=Chiffre, options=Options},
+    State = #state{hostname=Hostname, hostname_client = Hostname_client,sender_pid=SenderPid, sender_pid2=SenderPid2, addr=Address, options=Options},
     {ok, Banner, State};
 
 init(Hostname, _SessionCount, _Address, _Options) ->
@@ -123,7 +122,7 @@ handle_RCPT_extension(_Extension, _State) ->
 
 handle_DATA(_From, _To, <<>>, State) ->
     {error, "552 Message too small", State};
-handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client = Hostname_client,sender_pid=SenderPid,sender_pid2=_SenderPid2,addr=Address}) ->
+handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client = Hostname_client,sender_pid=SenderPid,sender_pid2=SenderPid2,addr=Address}) ->
     % some kind of unique id
     Reference = lists:flatten([io_lib:format("~2.16.0b", [X]) || <<X>> <= erlang:md5(term_to_binary(os:timestamp()))]),
             rabbit_log:info("EMAIL_HANDLER FILTER Hostname ~s ~n", [Hostname]),
@@ -138,7 +137,7 @@ handle_DATA(_From, To, Data, State=#state{hostname=Hostname,hostname_client = Ho
             %rabbit_log:info("EMAIL_HANDLER raboutage FIRSTS ~s ~n", [NewHeaders]),
 
    	    gen_server:cast(SenderPid, {Reference, To, <<"application/mime">>, Headers, Data, _From}),
-   	    %gen_server:cast(SenderPid2, {Reference, To, <<"application/mime">>, Headers, Data, _From}),
+   	    gen_server:cast(SenderPid2, {Reference, To, <<"application/mime">>, Headers, Data, _From}),
             {ok, Reference, State};
         error ->
             {error, "554 Message cannot be delivered", State}
@@ -179,11 +178,13 @@ handle_AUTH('cram-md5', <<"username">>, {Digest, Seed}, State) ->
 handle_AUTH(_Type, _Username, _Password, _State) ->
     error.
 
-handle_STARTTLS(Chiffre,State) ->
-    rabbit_log:info("EMAIL_HANDLER TLS Started ~p ~n",[Chiffre]),
+handle_STARTTLS(State) ->
+    rabbit_log:info("EMAIL_HANDLER handle_STARTTLS Started ~p ~n",[State]),
     %Chiffre = State#state.chiffre,
-    NewState = #state{chiffre=Chiffre},
-    NewState.
+    %NewState = #state{chiffre=Chiffre},
+    %NewState.
+    State.
+    %{ok, State}.
 
 handle_info({'EXIT', SenderPid, _Reason}, #state{sender_pid=SenderPid} = State) ->
     % sender failed, we terminate as well
